@@ -1,0 +1,386 @@
+// ===============================================
+// Creates: Azure AI Search, Microsoft Foundry (with model deployments)
+// ===============================================
+
+@description('Principal ID for role assignments (provided by azd)')
+param principalId string
+
+@description('The location where all resources will be deployed')
+param location string
+
+@description('AI Search service SKU')
+@allowed(['basic', 'standard', 'standard2', 'standard3', 'storage_optimized_l1', 'storage_optimized_l2'])
+param searchServiceSku string = 'standard'
+
+@description('Text embedding model name')
+@allowed(['text-embedding-3-large'])
+param embeddingModelName string = 'text-embedding-3-large'
+
+@description('Text embedding model version')
+param embeddingModelVersion string = '1'
+
+@description('Embedding model deployment capacity')
+@minValue(1)
+@maxValue(200)
+param embeddingModelCapacity int = 30
+
+@description('Chat/reasoning model name')
+param llmModelName string = 'gpt-4.1'
+
+@description('Chat/reasoning model version')
+param llmModelVersion string = '2025-04-14'
+
+@description('Chat/reasoning model deployment capacity')
+@minValue(1)
+@maxValue(200)
+param llmModelCapacity int = 50
+
+@description('Bump this value if role assignment deployment fails due to stale ARM tombstones')
+param roleAssignmentSuffix string = 'v2'
+
+
+// Variables for resource naming and configuration
+var uniqueSuffix = uniqueString(resourceGroup().id)
+var resourceNames = {
+  searchService: 'search-${uniqueSuffix}'
+  microsoftFoundry: 'foundry-${uniqueSuffix}'
+  microsoftFoundryProject: 'foundry-project-${uniqueSuffix}'
+  embeddingDeployment: 'text-embedding-3-large'
+  llmDeployment: 'gpt-4.1'
+  logAnalyticsWorkspace: 'log-${uniqueSuffix}'
+  applicationInsights: 'appi-${uniqueSuffix}'
+}
+
+// ===============================================
+// AZURE AI SEARCH SERVICE
+// ===============================================
+
+@description('Azure AI Search service for vector search and document indexing')
+resource searchService 'Microsoft.Search/searchServices@2023-11-01' = {
+  name: resourceNames.searchService
+  location: location
+  sku: {
+    name: searchServiceSku
+  }
+  properties: {
+    replicaCount: 1
+    partitionCount: 1
+    hostingMode: 'default'
+    publicNetworkAccess: 'enabled'
+    networkRuleSet: {
+      ipRules: []
+    }
+    encryptionWithCmk: {
+      enforcement: 'Unspecified'
+    }
+    disableLocalAuth: false
+    authOptions: {
+      aadOrApiKey: {
+        aadAuthFailureMode: 'http401WithBearerChallenge'
+      }
+    }
+    semanticSearch: 'standard'
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+}
+
+// ===============================================
+// SERVICE PRINCIPAL ROLE ASSIGNMENTS
+// ===============================================
+
+// Search Index Data Contributor role for SP
+resource SPuserSearchIndexContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(uniqueSuffix, 'sp-data-reader', roleAssignmentSuffix) 
+  scope: searchService
+  properties: {
+    principalId: searchService.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8ebe5a00-799e-43f5-93ac-243d3dce84a7')
+  }
+}
+
+// Cognitive Services OpenAI User role for AI Search MI on Foundry account
+resource searchServiceToOpenAIRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryAccount.id, searchService.name, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd', roleAssignmentSuffix)
+  scope: microsoftFoundryAccount
+  properties: {
+    principalId: searchService.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+  }
+}
+
+// Azure AI User role for AI Search MI on Foundry account
+resource searchServiceToAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryAccount.id, searchService.name, '53ca6127-db72-4b80-b1b0-d745d6d5456d', roleAssignmentSuffix)
+  scope: microsoftFoundryAccount
+  properties: {
+    principalId: searchService.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+  }
+}
+
+// Cognitive Services User role for AI Search MI on Foundry account
+resource searchServiceToCognitiveServicesUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryAccount.id, searchService.name, 'a97b65f3-24c7-4388-baec-2e87135dc908', roleAssignmentSuffix)
+  scope: microsoftFoundryAccount
+  properties: {
+    principalId: searchService.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'a97b65f3-24c7-4388-baec-2e87135dc908')
+  }
+}
+
+// ===============================================
+// LAB USER ROLE ASSIGNMENTS
+// ===============================================
+
+// Search Service Contributor role for lab user
+resource userSearchContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, resourceGroup().id, searchService.name, principalId, '7ca78c08-252a-4471-8644-bb5ff32d4ba0')
+  scope: searchService
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7ca78c08-252a-4471-8644-bb5ff32d4ba0')
+  }
+}
+
+// Search Index Data Reader role for lab user
+resource userSearchIndexReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, resourceGroup().id, searchService.name, principalId, '1407120a-92aa-4202-b7e9-c0e197c71c8f')
+  scope: searchService
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1407120a-92aa-4202-b7e9-c0e197c71c8f')
+  }
+}
+
+// Search Index Data Contributor role for lab user
+resource userSearchIndexDataContributorRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(subscription().id, resourceGroup().id, searchService.name, principalId, '8ebe5a00-799e-43f5-93ac-243d3dce84a7')
+  scope: searchService
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '8ebe5a00-799e-43f5-93ac-243d3dce84a7')
+  }
+}
+
+
+// ===============================================
+// MICROSOFT FOUNDRY (Account + Project)
+// ===============================================
+
+@description('Microsoft Foundry account')
+resource microsoftFoundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
+  name: resourceNames.microsoftFoundry
+  location: location
+  kind: 'AIServices'
+  sku: {
+    name: 'S0'
+  }
+  properties: {
+    allowProjectManagement: true
+    customSubDomainName: resourceNames.microsoftFoundry
+    publicNetworkAccess: 'Enabled'
+    disableLocalAuth: false
+    networkAcls: {
+      defaultAction: 'Allow'
+      virtualNetworkRules: []
+      ipRules: []
+    }
+  }
+  identity: {
+    type: 'SystemAssigned'
+  }
+}
+
+@description('Microsoft Foundry project')
+resource microsoftFoundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
+  parent: microsoftFoundryAccount
+  name: resourceNames.microsoftFoundryProject
+  location: location
+  identity: {
+    type: 'SystemAssigned'
+  }
+  properties: {}
+}
+
+// Search Index Data Reader role for the Foundry project managed identity.
+// This is required for KB MCP access when the project connection uses ProjectManagedIdentity.
+resource microsoftFoundryProjectSearchIndexReaderRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(searchService.id, microsoftFoundryProject.id, '1407120a-92aa-4202-b7e9-c0e197c71c8f', roleAssignmentSuffix)
+  scope: searchService
+  properties: {
+    principalId: microsoftFoundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '1407120a-92aa-4202-b7e9-c0e197c71c8f')
+  }
+}
+
+// Azure AI User role for the Foundry project's own managed identity on itself.
+// Required by the Portal/runtime so the project MI can invoke its own agents and models.
+resource microsoftFoundryProjectMIAIUserRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryProject.id, 'Azure AI User', microsoftFoundryProject.name, roleAssignmentSuffix)
+  scope: microsoftFoundryProject
+  properties: {
+    principalId: microsoftFoundryProject.identity.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+  }
+}
+
+// ===============================================
+// MODEL DEPLOYMENTS (under Microsoft Foundry account)
+// ===============================================
+
+@description('Text embedding model deployment for vector generation')
+resource embeddingModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+  parent: microsoftFoundryAccount
+  name: resourceNames.embeddingDeployment
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: embeddingModelName
+      version: embeddingModelVersion
+    }
+  }
+  sku: {
+    name: 'GlobalStandard'
+    capacity: embeddingModelCapacity
+  }
+}
+
+@description('Chat/reasoning model deployment for agentic retrieval')
+resource llmModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+  parent: microsoftFoundryAccount
+  name: resourceNames.llmDeployment
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: llmModelName
+      version: llmModelVersion
+    }
+  }
+  sku: {
+    name: 'GlobalStandard'
+    capacity: llmModelCapacity
+  }
+  dependsOn: [
+    embeddingModelDeployment
+  ]
+}
+
+// Azure AI User role for lab user on Microsoft Foundry account (needed for Azure OpenAI API)
+resource userMicrosoftFoundryAccountRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryAccount.id, 'Azure AI User', principalId)
+  scope: microsoftFoundryAccount
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+  }
+}
+
+// Azure AI Project Manager role for lab user on Microsoft Foundry account
+resource userMicrosoftFoundryAccountProjectManagerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryAccount.id, 'Azure AI Project Manager', principalId)
+  scope: microsoftFoundryAccount
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'eadc314b-1a2d-4efa-be10-5d325db5065e')
+  }
+}
+
+// Azure AI User role for lab user on Microsoft Foundry project (needed for projects/agents API)
+resource userMicrosoftFoundryProjectRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryProject.id, 'Azure AI User', principalId)
+  scope: microsoftFoundryProject
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+  }
+}
+
+// Azure AI Project Manager role for lab user on Microsoft Foundry project (needed for agents/write)
+resource userMicrosoftFoundryProjectManagerRoleAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(microsoftFoundryProject.id, 'Azure AI Project Manager', principalId)
+  scope: microsoftFoundryProject
+  properties: {
+    principalId: principalId
+    principalType: 'User'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', 'eadc314b-1a2d-4efa-be10-5d325db5065e')
+  }
+}
+
+// ===============================================
+// APPLICATION INSIGHTS + LOG ANALYTICS
+// ===============================================
+
+module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
+  name: 'logAnalyticsWorkspaceDeploy'
+  params: {
+    name: resourceNames.logAnalyticsWorkspace
+    location: location
+  }
+}
+
+module applicationInsights 'br/public:avm/res/insights/component:0.7.1' = {
+  name: 'applicationInsightsDeploy'
+  params: {
+    name: resourceNames.applicationInsights
+    location: location
+    workspaceResourceId: logAnalyticsWorkspace.outputs.resourceId
+  }
+}
+
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+  parent: microsoftFoundryProject
+  name: 'appinsights-connection'
+  properties: {
+    category: 'AppInsights'
+    target: applicationInsights.outputs.connectionString
+    authType: 'ApiKey'
+    isSharedToAll: true
+    metadata: {
+      ResourceId: applicationInsights.outputs.resourceId
+    }
+    credentials: {
+      key: applicationInsights.outputs.instrumentationKey
+    }
+  }
+}
+
+@description('Microsoft Foundry project endpoint in SDK format')
+output MICROSOFT_FOUNDRY_PROJECT_ENDPOINT string = 'https://${microsoftFoundryAccount.name}.services.ai.azure.com/api/projects/${microsoftFoundryProject.name}'
+
+@description('Microsoft Foundry project resource ID')
+output MICROSOFT_FOUNDRY_PROJECT_ID string = microsoftFoundryProject.id
+
+@description('Azure AI Search service endpoint')
+output AZURE_SEARCH_SERVICE_ENDPOINT string = 'https://${searchService.name}.search.windows.net'
+
+@description('Azure AI Search service name')
+output AZURE_SEARCH_SERVICE_NAME string = searchService.name
+
+@description('Azure OpenAI service endpoint (via Microsoft Foundry account)')
+output AZURE_OPENAI_ENDPOINT string = microsoftFoundryAccount.properties.endpoint
+
+@description('Azure OpenAI service name (Microsoft Foundry account)')
+output AZURE_OPENAI_SERVICE_NAME string = microsoftFoundryAccount.name
+
+@description('Text embedding model deployment name')
+output AZURE_OPENAI_EMBEDDING_DEPLOYMENT string = embeddingModelDeployment.name
+
+@description('Chat model deployment name')
+output AZURE_OPENAI_CHATGPT_DEPLOYMENT string = llmModelDeployment.name
+
+@description('Application Insights connection string for tracing')
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = applicationInsights.outputs.connectionString
