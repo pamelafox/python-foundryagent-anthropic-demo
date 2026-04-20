@@ -1,37 +1,39 @@
-"""Create 20 Foundry agents with different prompts and personalities."""
+"""Create a single Foundry agent."""
 
 import os
 
 from azure.ai.projects import AIProjectClient
 from azure.ai.projects.models import PromptAgentDefinition
-from azure.identity import AzureCliCredential
+from azure.ai.projects.models import MCPTool
+from azure.identity import AzureDeveloperCliCredential
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
 project_endpoint = os.environ["PROJECT_ENDPOINT"]
 azure_ai_chat_deployment = os.environ["AZURE_AI_CHAT_DEPLOYMENT"]
+cupcake_mcp_endpoint = os.environ["CUPCAKE_MCP_ENDPOINT"]
 
 project_client = AIProjectClient(
     endpoint=project_endpoint,
-    credential=AzureCliCredential(process_timeout=60),
+    credential=AzureDeveloperCliCredential(tenant_id=os.environ["AZURE_TENANT_ID"]),
 )
 
-AGENTS = [
-    {
-        "name": "hr-policy-advisor",
-        "instructions": "You are an HR policy advisor for a large enterprise. Help employees understand company policies on PTO, benefits, performance reviews, and workplace conduct. Always reference relevant policy sections and recommend escalation to HR for edge cases.",
-    }
-]
+agent = project_client.agents.create_version(
+    agent_name="cupcake-agent",
+    definition=PromptAgentDefinition(
+        model=azure_ai_chat_deployment,
+        instructions= "You help customers order cupcakes and check the status of their orders.",
+        tools=[
+            MCPTool(
+                server_label="cupcake-mcp-server",
+                server_url=cupcake_mcp_endpoint,
+                require_approval="never",
+                allowed_tools=["list_cupcakes", "order_cupcake", "check_order_status"],
+                project_connection_id="cupcake-mcp",
+            )
+        ],
+    ),
+)
 
-for agent_def in AGENTS:
-    agent = project_client.agents.create_version(
-        agent_name=agent_def["name"],
-        definition=PromptAgentDefinition(
-            model=azure_ai_chat_deployment,
-            instructions=agent_def["instructions"],
-        ),
-    )
-    print(f"Created agent '{agent.name}' (ID: {agent.id}, version: {agent.version})")
-
-print(f"\nDone — {len(AGENTS)} agents created.")
+print(f"Created agent '{agent.name}' (ID: {agent.id}, version: {agent.version})")

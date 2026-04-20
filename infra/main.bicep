@@ -9,12 +9,24 @@ param principalId string
 param location string
 
 @description('Chat/reasoning model name')
-param llmModelName string = 'claude-sonnet-4-5'
+param llmModelName string = 'claude-sonnet-4-6'
 
 @description('Chat/reasoning model deployment capacity')
 @minValue(1)
 @maxValue(200)
 param llmModelCapacity int = 50
+
+@description('Organization name required by Anthropic model provider data')
+param anthropicOrganizationName string
+
+@description('Two-letter country code required by Anthropic model provider data')
+param anthropicCountryCode string
+
+@description('Industry string required by Anthropic model provider data')
+param anthropicIndustry string
+
+@description('Remote MCP endpoint URL for the cupcake tool server')
+param cupcakeMcpEndpoint string
 
 @description('Bump this value if role assignment deployment fails due to stale ARM tombstones')
 param roleAssignmentSuffix string = 'v2'
@@ -25,7 +37,7 @@ var uniqueSuffix = uniqueString(resourceGroup().id)
 var resourceNames = {
   microsoftFoundry: 'foundry-${uniqueSuffix}'
   microsoftFoundryProject: 'foundry-project-${uniqueSuffix}'
-  llmDeployment: llmModelName
+  llmDeployment: '${llmModelName}-${take(uniqueSuffix, 6)}'
   logAnalyticsWorkspace: 'log-${uniqueSuffix}'
   applicationInsights: 'appi-${uniqueSuffix}'
 }
@@ -35,7 +47,7 @@ var resourceNames = {
 // ===============================================
 
 @description('Microsoft Foundry account')
-resource microsoftFoundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
+resource microsoftFoundryAccount 'Microsoft.CognitiveServices/accounts@2025-10-01-preview' = {
   name: resourceNames.microsoftFoundry
   location: location
   kind: 'AIServices'
@@ -59,7 +71,7 @@ resource microsoftFoundryAccount 'Microsoft.CognitiveServices/accounts@2025-04-0
 }
 
 @description('Microsoft Foundry project')
-resource microsoftFoundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
+resource microsoftFoundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-10-01-preview' = {
   parent: microsoftFoundryAccount
   name: resourceNames.microsoftFoundryProject
   location: location
@@ -86,7 +98,7 @@ resource microsoftFoundryProjectMIAIUserRoleAssignment 'Microsoft.Authorization/
 // ===============================================
 
 @description('Anthropic Claude model deployment')
-resource llmModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource llmModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-10-01-preview' = {
   parent: microsoftFoundryAccount
   name: resourceNames.llmDeployment
   properties: {
@@ -95,6 +107,13 @@ resource llmModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
       name: llmModelName
       version: '1'
     }
+    modelProviderData: {
+      organizationName: anthropicOrganizationName
+      countryCode: anthropicCountryCode
+      industry: anthropicIndustry
+    }
+    versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
+    raiPolicyName: 'Microsoft.DefaultV2'
   }
   sku: {
     name: 'GlobalStandard'
@@ -167,7 +186,25 @@ module applicationInsights 'br/public:avm/res/insights/component:0.7.1' = {
   }
 }
 
-resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-04-01-preview' = {
+resource cupcakeMcpConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = {
+  parent: microsoftFoundryProject
+  name: 'cupcake-mcp'
+  properties: {
+    authType: 'None'
+    category: 'RemoteTool'
+    target: cupcakeMcpEndpoint
+    useWorkspaceManagedIdentity: false
+    isSharedToAll: false
+    sharedUserList: []
+    peRequirement: 'NotRequired'
+    peStatus: 'NotApplicable'
+    metadata: {
+      type: 'custom_MCP'
+    }
+  }
+}
+
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = {
   parent: microsoftFoundryProject
   name: 'appinsights-connection'
   properties: {
@@ -189,6 +226,9 @@ output MICROSOFT_FOUNDRY_PROJECT_ENDPOINT string = 'https://${microsoftFoundryAc
 
 @description('Microsoft Foundry project resource ID')
 output MICROSOFT_FOUNDRY_PROJECT_ID string = microsoftFoundryProject.id
+
+@description('Azure tenant ID for authentication flows')
+output AZURE_TENANT_ID string = tenant().tenantId
 
 @description('Claude model deployment name')
 output AZURE_AI_CHAT_DEPLOYMENT string = llmModelDeployment.name

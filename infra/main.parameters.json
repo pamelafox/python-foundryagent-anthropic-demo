@@ -7,6 +7,18 @@
     },
     "location": {
       "value": "${AZURE_LOCATION}"
+    },
+    "anthropicOrganizationName": {
+      "value": "${ANTHROPIC_ORGANIZATION_NAME}"
+    },
+    "anthropicCountryCode": {
+      "value": "${ANTHROPIC_COUNTRY_CODE}"
+    },
+    "anthropicIndustry": {
+      "value": "${ANTHROPIC_INDUSTRY}"
+    },
+    "cupcakeMcpEndpoint": {
+      "value": "${CUPCAKE_MCP_ENDPOINT}"
     }
   }
 }
