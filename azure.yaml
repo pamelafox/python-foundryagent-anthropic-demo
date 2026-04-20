@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://raw.githubusercontent.com/Azure/azure-dev/main/schemas/v1.0/azure.yaml.json
-name: python-foundryagent-demos
+name: python-foundryagent-anthropic-demo
 metadata:
-  template: python-foundryagent-demos@0.1.0
+  template: python-foundryagent-anthropic-demo@0.1.0
 hooks:
   postprovision:
     posix:
