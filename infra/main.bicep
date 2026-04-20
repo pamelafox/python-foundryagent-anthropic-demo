@@ -230,6 +230,9 @@ output MICROSOFT_FOUNDRY_PROJECT_ID string = microsoftFoundryProject.id
 @description('Azure tenant ID for authentication flows')
 output AZURE_TENANT_ID string = tenant().tenantId
 
+@description('Project connection name for the cupcake MCP server')
+output CUPCAKE_MCP_PROJECT_CONNECTION_NAME string = cupcakeMcpConnection.name
+
 @description('Claude model deployment name')
 output AZURE_AI_CHAT_DEPLOYMENT string = llmModelDeployment.name
 

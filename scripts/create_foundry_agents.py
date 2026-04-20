@@ -13,6 +13,7 @@ load_dotenv(override=True)
 project_endpoint = os.environ["PROJECT_ENDPOINT"]
 azure_ai_chat_deployment = os.environ["AZURE_AI_CHAT_DEPLOYMENT"]
 cupcake_mcp_endpoint = os.environ["CUPCAKE_MCP_ENDPOINT"]
+project_connection_name = os.environ["CUPCAKE_MCP_PROJECT_CONNECTION_NAME"]
 
 project_client = AIProjectClient(
     endpoint=project_endpoint,
@@ -30,7 +31,7 @@ agent = project_client.agents.create_version(
                 server_url=cupcake_mcp_endpoint,
                 require_approval="never",
                 allowed_tools=["list_cupcakes", "order_cupcake", "check_order_status"],
-                project_connection_id="cupcake-mcp",
+                project_connection_id=project_connection_name,
             )
         ],
     ),
