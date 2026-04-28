@@ -31,6 +31,9 @@ param cupcakeMcpEndpoint string
 @description('Bump this value if role assignment deployment fails due to stale ARM tombstones')
 param roleAssignmentSuffix string = 'v2'
 
+@description('Whether to deploy Application Insights and Log Analytics Workspace')
+param deployApplicationInsights bool = true
+
 
 // Variables for resource naming and configuration
 var uniqueSuffix = uniqueString(resourceGroup().id)
@@ -169,7 +172,7 @@ resource userMicrosoftFoundryProjectManagerRoleAssignment 'Microsoft.Authorizati
 // APPLICATION INSIGHTS + LOG ANALYTICS
 // ===============================================
 
-module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = {
+module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0.15.0' = if (deployApplicationInsights) {
   name: 'logAnalyticsWorkspaceDeploy'
   params: {
     name: resourceNames.logAnalyticsWorkspace
@@ -177,7 +180,7 @@ module logAnalyticsWorkspace 'br/public:avm/res/operational-insights/workspace:0
   }
 }
 
-module applicationInsights 'br/public:avm/res/insights/component:0.7.1' = {
+module applicationInsights 'br/public:avm/res/insights/component:0.7.1' = if (deployApplicationInsights) {
   name: 'applicationInsightsDeploy'
   params: {
     name: resourceNames.applicationInsights
@@ -204,7 +207,7 @@ resource cupcakeMcpConnection 'Microsoft.CognitiveServices/accounts/projects/con
   }
 }
 
-resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = {
+resource appInsightsConnection 'Microsoft.CognitiveServices/accounts/projects/connections@2025-10-01-preview' = if (deployApplicationInsights) {
   parent: microsoftFoundryProject
   name: 'appinsights-connection'
   properties: {
@@ -237,4 +240,4 @@ output CUPCAKE_MCP_PROJECT_CONNECTION_NAME string = cupcakeMcpConnection.name
 output AZURE_AI_CHAT_DEPLOYMENT string = llmModelDeployment.name
 
 @description('Application Insights connection string for tracing')
-output APPLICATIONINSIGHTS_CONNECTION_STRING string = applicationInsights.outputs.connectionString
+output APPLICATIONINSIGHTS_CONNECTION_STRING string = deployApplicationInsights ? applicationInsights.outputs.connectionString : ''
