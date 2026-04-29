@@ -22,9 +22,6 @@ param anthropicOrganizationName string
 @description('Two-letter country code required by Anthropic model provider data')
 param anthropicCountryCode string
 
-@description('Industry string required by Anthropic model provider data')
-param anthropicIndustry string
-
 @description('Remote MCP endpoint URL for the cupcake tool server')
 param cupcakeMcpEndpoint string
 
@@ -113,7 +110,7 @@ resource llmModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
     modelProviderData: {
       organizationName: anthropicOrganizationName
       countryCode: anthropicCountryCode
-      industry: anthropicIndustry
+      industry: 'technology'
     }
     versionUpgradeOption: 'OnceNewDefaultVersionAvailable'
     raiPolicyName: 'Microsoft.DefaultV2'
