@@ -14,9 +14,6 @@
     "anthropicCountryCode": {
       "value": "${ANTHROPIC_COUNTRY_CODE}"
     },
-    "anthropicIndustry": {
-      "value": "${ANTHROPIC_INDUSTRY}"
-    },
     "cupcakeMcpEndpoint": {
       "value": "${CUPCAKE_MCP_ENDPOINT}"
     }

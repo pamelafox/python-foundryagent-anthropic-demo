@@ -23,7 +23,7 @@ param anthropicOrganizationName string
 param anthropicCountryCode string
 
 @description('Industry string required by Anthropic model provider data')
-param anthropicIndustry string
+param anthropicIndustry string = 'technology'
 
 @description('Remote MCP endpoint URL for the cupcake tool server')
 param cupcakeMcpEndpoint string
